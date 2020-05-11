@@ -10,30 +10,36 @@ FrameEngine
 
    .. autosummary::
 
-      ~FrameEngine.df
+      ~FrameEngine.datacols
+      ~FrameEngine.indexcols
       ~FrameEngine.table
 
    .. rubric:: Methods Summary
 
    .. autosummary::
 
-      ~FrameEngine.applyfunc
+      ~FrameEngine.apply
+      ~FrameEngine.col_apply
       ~FrameEngine.cols_tolong
       ~FrameEngine.drop
       ~FrameEngine.expand_col
-      ~FrameEngine.mapfunc
+      ~FrameEngine.reduce
+      ~FrameEngine.rename
       ~FrameEngine.tolong
 
    .. rubric:: Attributes Documentation
 
-   .. autoattribute:: df
+   .. autoattribute:: datacols
+   .. autoattribute:: indexcols
    .. autoattribute:: table
 
    .. rubric:: Methods Documentation
 
-   .. automethod:: applyfunc
+   .. automethod:: apply
+   .. automethod:: col_apply
    .. automethod:: cols_tolong
    .. automethod:: drop
    .. automethod:: expand_col
-   .. automethod:: mapfunc
+   .. automethod:: reduce
+   .. automethod:: rename
    .. automethod:: tolong
