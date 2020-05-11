@@ -20,12 +20,12 @@ FrameEngine
 
       ~FrameEngine.apply
       ~FrameEngine.col_apply
-      ~FrameEngine.cols_tolong
+      ~FrameEngine.cols_to_long
       ~FrameEngine.drop
       ~FrameEngine.expand_col
-      ~FrameEngine.reduce
       ~FrameEngine.rename
-      ~FrameEngine.tolong
+      ~FrameEngine.to_long
+      ~FrameEngine.to_puffy
 
    .. rubric:: Attributes Documentation
 
@@ -37,9 +37,9 @@ FrameEngine
 
    .. automethod:: apply
    .. automethod:: col_apply
-   .. automethod:: cols_tolong
+   .. automethod:: cols_to_long
    .. automethod:: drop
    .. automethod:: expand_col
-   .. automethod:: reduce
    .. automethod:: rename
-   .. automethod:: tolong
+   .. automethod:: to_long
+   .. automethod:: to_puffy

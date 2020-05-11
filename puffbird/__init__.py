@@ -3,5 +3,9 @@ __email__ = 'gucky@gucky.eu'
 __version__ = '0.0.0'
 
 from .frame import FrameEngine
+from .shortcuts import puffy_to_long
 
-__all__ = ['FrameEngine']
+__all__ = [
+    'FrameEngine',
+    'puffy_to_long'
+]

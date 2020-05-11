@@ -7,36 +7,40 @@ plotting and groupby computations.
 """
 
 import re
+from typing import (
+    Dict, Union, Optional,
+    Collection
+)
 
 import pandas as pd
 
 from .err import PuffbirdError
 
-RESERVED_COLUMNS = {'applyfunc_result', 'max_depth', 'dropna', 'transformer'}
+RESERVED_COLUMNS = {
+    'apply_result', 'max_depth', 'dropna', 'iterable',
+    'datacols', 'indexcols', 'handle_column_types',
+    'enforce_identifier_string', 'aggfunc'
+}
 DEFAULT_MAX_DEPTH = 3
-DEFAULT_REDUCE_METHOD = list
+DEFAULT_AGGFUNC = list
+DEFAULT_ITERABLE = iter
 DATACOL_REGEX = '{datacol}(_level)?[1-9]*$'
 
-# TODO merging tables?
-# TODO use maybe wide_to_long?
 # TODO other iter functions (with dictionaries etc.)
-# TODO collapse class or within transformer
-# TODO make identifier columns from other column names
-# TODO transformer for long dataframes
-# TODO relax identifier restriction for columns?
-# TODO index to multiindex when only single index?
-# TODO long frame to xarray?
+# TODO long frame to xarray? - multidimensional pivot
 
 
 class FrameEngine:
-    """class to transform wide dataframes pulled from datajoint
+    """
+    Class to transform dataframes into different formats
 
     Parameters
     ----------
     table : pandas.DataFrame
         A dataframe with columns defining datatypes and rows being different
         entries. All column and index names must be identifier string types.
-        Individual cells in the dataframe may have arbitrary objects in them.
+        Individual cells in the data columns may have arbitrary objects in
+        them.
     datacols : list-like
         The columns in the dataframe that are considered "data"; i.e. for
         example columns where each cell is a numpy.array, e.g. a timestamp
@@ -59,16 +63,16 @@ class FrameEngine:
     def __init__(
         self,
         table,
-        datacols=None,
-        indexcols=None,
+        datacols: Optional[Collection] = None,
+        indexcols: Optional[Collection] = None,
         inplace: bool = False,
         handle_column_types: bool = True,
         enforce_identifier_string: bool = True
     ):
         if isinstance(table, pd.Series):
-            table = self._process_table_when_series(table)
+            table = _process_table_when_series(table)
         elif not isinstance(table, pd.DataFrame):
-            table = self._process_table_when_unknown_object(table)
+            table = _process_table_when_unknown_object(table)
 
         truth = RESERVED_COLUMNS & set(table.columns)
         if truth:
@@ -78,7 +82,7 @@ class FrameEngine:
         if not inplace:
             table = table.copy()
 
-        table, datacols, indexcols = self._process_column_types(
+        table, datacols, indexcols = _process_column_types(
             table, datacols, indexcols
         )
 
@@ -86,12 +90,12 @@ class FrameEngine:
         if not isinstance(table.index, pd.MultiIndex):
             table.index = pd.MultiIndex.from_frame(table.index.to_frame())
 
-        table = self._enforce_identifier_column_types(
+        table = _enforce_identifier_column_types(
             table, handle_column_types, enforce_identifier_string
         )
 
         # check table index and column types
-        self._check_table_column_types(table, enforce_identifier_string)
+        _check_table_column_types(table, enforce_identifier_string)
 
         # check if index is unique
         if not table.index.is_unique:
@@ -100,177 +104,6 @@ class FrameEngine:
 
         # assign table
         self._table = table
-
-    @staticmethod
-    def _process_table_when_series(table):
-        if table.name is None:
-            if 'data_column' in table.index.names:
-                raise PuffbirdError("When table is a pandas.Series "
-                                    "object, the index names cannot "
-                                    "contain the name 'data_column'.")
-            return table.to_frame(name='data_column')
-        return table.to_frame()
-
-    @staticmethod
-    def _process_table_when_unknown_object(table):
-        try:
-            return pd.DataFrame(table)
-        except Exception as e:
-            raise PuffbirdError(f"Cannot convert 'table' argument of type "
-                                f"'{type(table)}' to dataframe: {e}")
-
-    @staticmethod
-    def _process_column_types(table, datacols, indexcols):
-        if datacols is None and indexcols is None:
-            # indexcols already in index
-            return table, datacols, indexcols
-
-        if indexcols is None:
-            indexcols = list(set(table.columns) - set(datacols))
-        elif datacols is None:
-            datacols = list(set(table.columns) - set(indexcols))
-
-        # no columns given that are not in dataframe
-        truth = set(datacols) - set(table.columns)
-        assert not truth, (
-            f'datacols contains columns not in dataframe: {truth}.'
-        )
-        truth = set(indexcols) - set(table.columns)
-        assert not truth, (
-            f'indexcols contains columns not in dataframe: {truth}.'
-        )
-        # keep original index for uniqueness
-        if not indexcols:
-            pass
-        else:
-            table.set_index(indexcols, append=True, inplace=True)
-
-        # if only a few columns were selected
-        if set(table.columns) - set(datacols):
-            table = table[datacols]
-
-        # return
-        return table, datacols, indexcols
-
-    def _enforce_identifier_column_types(
-        self, table, handle_column_types, enforce_identifier_string
-    ):
-        # if not handling column types
-        if not handle_column_types:
-            return table
-
-        # convert data columns
-        datacols_rename = {}
-        for datacol in table.columns:
-            if isinstance(datacol, str):
-                if not enforce_identifier_string:
-                    new_datacol = datacol
-                elif datacol.isdigit():
-                    new_datacol = 'data_column_' + datacol
-                else:
-                    # replace various characters
-                    new_datacol = self._label_character_replacement(datacol)
-            elif isinstance(datacol, int):
-                new_datacol = f'data_column_{datacol}'
-            else:
-                raise PuffbirdError(f"Datacolumn must string or integer "
-                                    f"but is type: {type(datacol)}.")
-
-            if datacol != new_datacol:
-                datacols_rename[datacol] = new_datacol
-
-        # rename columns
-        if datacols_rename:
-            table.rename(columns=datacols_rename, inplace=True)
-
-        # convert index columns
-        indexcols_rename = {}
-        for idx, indexcol in enumerate(table.index.names):
-            if indexcol is None:
-                new_indexcol = 'index_column_' + idx
-            elif isinstance(indexcol, str):
-                if not enforce_identifier_string:
-                    new_indexcol = indexcol
-                elif indexcol.isdigit():
-                    new_indexcol = 'index_column_' + indexcol
-                else:
-                    # replace various characters
-                    new_indexcol = self._label_character_replacement(indexcol)
-            elif isinstance(indexcol, int):
-                new_indexcol = f'index_column_{indexcol}'
-            else:
-                raise PuffbirdError(f"Indexcolumn must string or integer "
-                                    f"but is type: {type(indexcol)}.")
-
-            if indexcol != new_indexcol:
-                indexcols_rename[indexcol] = new_indexcol
-
-        # rename indices
-        if indexcols_rename:
-            table.rename_axis(index=indexcols_rename, inplace=True)
-
-        return table
-
-    @staticmethod
-    def _label_character_replacement(label):
-        return label.replace(
-            '#', '_'
-        ).replace(
-            '-', '_'
-        ).replace(
-            '@', 'at'
-        ).replace(
-            '(', '_'
-        ).replace(
-            ')', '_'
-        ).strip(
-            ''
-        ).replace(
-            '', '_'
-        ).replace(
-            '"', ''
-        ).replace(
-            "'", ''
-        ).replace(
-            "`", ''
-        ).replace(
-            "%", "perc"
-        ).replace(
-            '$', 'Dollar'
-        ).replace(
-            '&', '_and_'
-        ).replace(
-            '*', '_x_'
-        )
-
-    def _check_table_column_types(self, table, enforce_identifier_string):
-        # columns and index names must be identifier string types
-        for datacol in table.columns:
-            if not isinstance(datacol, str):
-                raise PuffbirdError(f"Datacolumn '{datacol}' is not a "
-                                    f"string type: {type(datacol)}")
-            if not datacol.isidentifier() and enforce_identifier_string:
-                raise PuffbirdError(f"Datacolumn '{datacol}' is not a "
-                                    f"identifier string type.")
-        if len(set(table.columns)) != len(table.columns):
-            raise PuffbirdError(f"Datacols '{tuple(table.columns)}' "
-                                f"are not unique.")
-        for indexcol in table.index.names:
-            if not isinstance(indexcol, str):
-                raise PuffbirdError(f"Indexcolumn '{indexcol}' is not a "
-                                    f"string type: {type(indexcol)}")
-            if not indexcol.isidentifier() and enforce_identifier_string:
-                raise PuffbirdError(f"Indexcolumn '{indexcol}' is not a"
-                                    f"identifier string type.")
-            for datacol in table.columns:
-                if self._datacol_rematch(datacol, indexcol):
-                    raise PuffbirdError(f"Indexcolumn '{indexcol}' matches "
-                                        f"datacol '{datacol}': Indexcol "
-                                        f"cannot start the same way as "
-                                        f"datacol.")
-        if len(set(table.index.names)) != len(table.index.names):
-            raise PuffbirdError(f"Indexcols '{tuple(table.index.names)}' "
-                                f"are not unique.")
 
     @property
     def table(self):
@@ -293,25 +126,25 @@ class FrameEngine:
         """
         return tuple(self._table.index.names)
 
-    def tolong(
+    def to_long(
         self, *,
-        transformer: callable = iter,
-        max_depth=DEFAULT_MAX_DEPTH,
+        iterable: Union[callable, Dict[str, callable]] = iter,
+        max_depth: Union[int, Dict[str, int]] = DEFAULT_MAX_DEPTH,
         dropna: bool = True,
-        **shared_axes
-    ) -> "pd.DataFrame":
+        **shared_axes: dict
+    ) -> pd.DataFrame:
         """
         Transform the dataframe into a long format dataframe.
 
         Parameters
         ----------
-        transformer : callable, optional
+        iterable : callable, optional
             function called on each cell for each "data column" to create
-            a new pandas.Series. If the "data columns" only contain array-like
+            a new `pd.Series`. If the "data columns" only contain array-like
             objects the default function `iter` is sufficient. If the
             "data columns" also contain other objects such as dictionaries,
             it may be necessary to provide a custom callable.
-        max_depth : int, list or dict, optional
+        max_depth : int or dict, optional
             Maximum depth of expanding each cell, before the algorithm stops
             for each "data column". If we set the max_depth to 3, for example,
             a "data column" consisting of 4-D numpy.arrays will result in a
@@ -328,13 +161,16 @@ class FrameEngine:
             an axis, and the value correspond to the depth/axis is shared
             for each "data column".
         """
-        # TODO simply a shortcut tolong
 
         # check shared axes arguments for correct formatting
-        self._check_shared_axes_argument(shared_axes)
+        _check_shared_axes_argument(shared_axes, self.datacols, self.indexcols)
 
         # convert max_depth correctly
-        max_depth, default_max_depth = self._max_depth_converter(max_depth)
+        max_depth, default_max_depth = _mapping_variable_converter(
+            self.table, max_depth, DEFAULT_MAX_DEPTH, 'max_depth')
+        # iterable dictionary
+        iterable, default_iterable = _mapping_variable_converter(
+            self.table, iterable, DEFAULT_MAX_DEPTH, 'iterable')
 
         # iterate of each data column
         for m, (datacol, series) in enumerate(self.table.items()):
@@ -347,8 +183,9 @@ class FrameEngine:
             ):
                 # superstack pandas.Series object
                 series = self._superstack_series(
-                    series, datacol, transformer, dropna,
-                    self._get_col_name(datacol, n, shared_axes)
+                    series, datacol,
+                    iterable.get(datacol, default_iterable), dropna,
+                    _get_col_name(datacol, n, shared_axes)
                 )
                 n += 1
 
@@ -364,80 +201,14 @@ class FrameEngine:
 
         return df
 
-    def _max_depth_converter(self, max_depth):
-        if isinstance(max_depth, dict):
-            max_depth = max_depth.copy()
-            default_max_depth = max_depth.pop('_default', DEFAULT_MAX_DEPTH)
-            remaining = set(max_depth) - set(self.datacols)
-            if remaining:
-                raise PuffbirdError(f"The 'max_depth' dictionary "
-                                    f"contains keys that are not in "
-                                    f"'datacols' {self.datacols}: "
-                                    f"'{remaining}'")
-        if isinstance(max_depth, list):
-            if len(max_depth) != len(self.datacols):
-                raise PuffbirdError(f"The 'max_depth' list is not the same "
-                                    f"length as 'datacols': {len(max_depth)}"
-                                    f"!={len(self.datacols)}.")
-            max_depth = {
-                datacol: max_depth_ele
-                for datacol, max_depth_ele in zip(self.datacols, max_depth)
-            }
-            default_max_depth = DEFAULT_MAX_DEPTH
-        else:
-            default_max_depth = max_depth
-            max_depth = {}
-        return max_depth, default_max_depth
-
-    def _check_shared_axes_argument(self, shared_axes):
-        for key, shared in shared_axes.items():
-            # must be dictionary
-            if not isinstance(shared, dict):
-                raise PuffbirdError(f"All shared axes arguments must be "
-                                    f"dictionaries, but the value for key "
-                                    f"'{key}' is of type '{type(shared)}'")
-            # keys must be in columns
-            not_in_columns = set(shared) - set(self.datacols)
-            if not_in_columns:
-                raise PuffbirdError(f"All keys of the dictionary of a shared "
-                                    f"axes argument must be present in the "
-                                    f"'datacols' {self.datacols}; these keys "
-                                    f"are not in columns: '{not_in_columns}'.")
-            # keys must be unique
-            key_is_unique = (
-                all(self._datacol_rematch(datacol, key)
-                    for datacol in self.table.columns)
-                and key not in self.table.index.names
-            )
-            if not key_is_unique:
-                raise PuffbirdError(f"The keyword '{key}' is not unique: "
-                                    f"It must not exist in in the 'datacols' "
-                                    f"{self.datacols} or the 'indexcols' "
-                                    f"{self.indexcols}, and it cannot start "
-                                    f"the same way as any 'datacolumn' in "
-                                    f"the dataframe.")
-
     @staticmethod
-    def _datacol_rematch(datacol, key):
-        return re.match(DATACOL_REGEX.format(datacol=datacol), key) is None
-
-    @staticmethod
-    def _get_col_name(datacol, n, shared_axes):
-        # if it is a shared axes the column name is key
-        # else it is "datacol_n"
-        for key, shared in shared_axes.items():
-            if shared.get(datacol, None) == n:
-                return key
-        return f"{datacol}_level{n}"
-
-    @staticmethod
-    def _superstack_series(series, datacol, transformer, dropna, col_name):
-        # apply series transformer (iter is default for sequences)
+    def _superstack_series(series, datacol, iterable, dropna, col_name):
+        # apply series iterable (iter is default for sequences)
         # series.index is already assumed to be multi index
         # transform into dataframe
         # this should automatically infer types
         table = series.apply(
-            lambda x: pd.Series(transformer(x)),
+            lambda x: pd.Series(iterable(x)),
             convert_dtype=True
         )
         # give columns index a name
@@ -463,13 +234,18 @@ class FrameEngine:
         else:
             return selected_table
 
-    def cols_tolong(self, *cols, **kwargs):
+    def cols_to_long(self, *cols: str, **kwargs) -> pd.DataFrame:
         """
-        Same as `tolong` but only applied to specific columns.
+        Same as :py:meth:`~FrameEngide.to_long` but only applied to
+        specific columns.
+
+        See Also
+        --------
+        FrameEngine.to_long
         """
         return self[list(cols)].tolong(**kwargs)
 
-    def expand_col(self, col, reset_index=True):
+    def expand_col(self, col: str, reset_index: bool = True) -> pd.DataFrame:
         """
         Expand a column that contains long dataframes and return
         a single long dataframe.
@@ -477,7 +253,8 @@ class FrameEngine:
 
         series = self[col]
         long_df = pd.concat(
-            list(series), keys=series.index, names=series.index.names,
+            list(series), keys=series.index,
+            names=series.index.names,
             sort=False
         )
 
@@ -487,7 +264,12 @@ class FrameEngine:
             return long_df
 
     def col_apply(
-        self, func, col, new_col_name=None, assign_to_index=None, **kwargs
+        self,
+        func: callable,
+        col: str,
+        new_col_name: Optional[str] = None,
+        assign_to_index: Optional[bool] = None,
+        **kwargs
     ):
         """apply a function to entries of a single column
 
@@ -512,14 +294,19 @@ class FrameEngine:
         if assign_to_index is None:
             assign_to_index = col in self.indexcols
         # apply function
-        series = self._select_frame(self.table, col).apply(func, **kwargs)
+        series = _select_frame(self.table, col).apply(func, **kwargs)
         # assign output
         self._assign_output_series(series, new_col_name, assign_to_index)
         return self
 
     def apply(
-        self, func, new_col_name, *args,
-        assign_to_index=False, map_kws={}, **kwargs
+        self,
+        func: callable,
+        new_col_name: Optional[callable],
+        *args: str,
+        assign_to_index: bool = False,
+        map_kws: Optional[Dict[str, str]]=None,
+        **kwargs
     ):
         """
         Apply a function across columns by mapping args and kwargs of func.
@@ -530,7 +317,7 @@ class FrameEngine:
             Function to apply.
         new_col_name : str
             Name of computed new col. If None, new_col_name will be
-            called 'applyfunc_result'.
+            called 'apply_result'.
         args : tuple
             Arguments passed to function. Each argument should be a column
             in the dataframe. This value is passed instead of the string.
@@ -541,8 +328,10 @@ class FrameEngine:
         kwargs: dict
             Keyword arguments passed to function as is.
         """
+        map_kws = {} if map_kws is None else map_kws
+
         if new_col_name is None:
-            new_col_name = 'applyfunc_result'
+            new_col_name = 'apply_result'
         # apply function
         series = self.table.reset_index().apply(
             lambda x: func(
@@ -582,14 +371,13 @@ class FrameEngine:
                                     f"different name.")
             self.table[new_col_name] = series
 
-    @staticmethod
-    def _select_frame(table, col):
-        if col in table.columns:
-            return table[col]
-        else:
-            table.index.to_frame()[col]
-
-    def drop(self, *columns, skip=False, skip_index=False, skip_data=False):
+    def drop(
+        self,
+        *columns: str,
+        skip: bool = False,
+        skip_index: bool = False,
+        skip_data: bool = False
+    ):
         """Drop columns in place.
         """
         not_found = set(columns) - (set(self.datacols) | set(self.indexcols))
@@ -616,7 +404,10 @@ class FrameEngine:
             self.table.index = index
         return self
 
-    def rename(self, **rename_kws):
+    def rename(
+        self,
+        **rename_kws: str
+    ):
         """
         Rename columns in place.
         """
@@ -631,54 +422,286 @@ class FrameEngine:
         )
         return self
 
-    def reduce(
-        self, *indexcols,
-        reduce_method=DEFAULT_REDUCE_METHOD, dropna=True
+    def to_puffy(
+        self,
+        *indexcols: str,
+        keep_missing_idcs: bool = True,
+        aggfunc: Union[callable, Dict[str, callable]] = DEFAULT_AGGFUNC,
+        dropna: bool = True,
+        inplace: bool = False
     ):
         """
         Reduce to a new unique set of indexcolumns by collapsing/aggregating
         the existing entries.
         """
-        # TODO handling nans?
-        reduce_method, default_reduce_method = self._reduce_method_converter(
-            reduce_method
-        )
+        # TODO shared axes? - proper long to puffy method
+
+        if keep_missing_idcs:
+            table = self.table.reset_index(
+                level=list(set(self.indexcols)-set(indexcols))
+            )
+        elif not inplace:
+            table = self.table.copy()
+        # drop nanas
+        if dropna:
+            table.dropna(inplace=True)
+
+        aggfunc, default_aggfunc = _mapping_variable_converter(
+            table, aggfunc, DEFAULT_AGGFUNC, 'aggfunc')
 
         def helper_func(df):
-            if dropna:
-                df.dropna(inplace=True)
+            # convert to dictionary
             dictionary = df.to_dict('list')
-            for key, method in reduce_method.items():
-                dictionary[key] = method(dictionary[key])
+            # only loop if aggfunc is not empty
+            # or the default method is not list
+            if aggfunc or (default_aggfunc != list):
+                for key, value in dictionary.items():
+                    method = aggfunc.get(key, default_aggfunc)
+                    dictionary[key] = method(value)
+            # convert to pandas Series
             return pd.Series(dictionary)
+        # aggregate
+        return table.groupby(list(indexcols)).aggregate(helper_func)
 
-        return self.table.groupby(list(indexcols)).aggregate(helper_func)
 
-    def _reduce_method_converter(self, reduce_method):
-        if isinstance(reduce_method, dict):
-            reduce_method = reduce_method.copy()
-            default_reduce_method = reduce_method.pop(
-                '_default', DEFAULT_REDUCE_METHOD
-            )
-            remaining = set(reduce_method) - set(self.datacols)
-            if remaining:
-                raise PuffbirdError(f"The 'reduce_method' dictionary "
-                                    f"contains keys that are not in "
-                                    f"'datacols' {self.datacols}: "
-                                    f"'{remaining}'")
-        if isinstance(reduce_method, list):
-            if len(reduce_method) != len(self.datacols):
-                raise PuffbirdError(f"The 'reduce_method' list is not the "
-                                    f"same length as 'datacols': "
-                                    f"{len(reduce_method)}"
-                                    f"!={len(self.datacols)}.")
-            reduce_method = {
-                datacol: reduce_method_ele
-                for datacol, reduce_method_ele
-                in zip(self.datacols, reduce_method)
-            }
-            default_reduce_method = DEFAULT_REDUCE_METHOD
+# --- helper functions ---
+
+
+def _datacol_rematch(datacol, key):
+    return re.match(DATACOL_REGEX.format(datacol=datacol), key) is None
+
+
+def _get_col_name(datacol, n, shared_axes):
+    # if it is a shared axes the column name is key
+    # else it is "datacol_n"
+    for key, shared in shared_axes.items():
+        if shared.get(datacol, None) == n:
+            return key
+    return f"{datacol}_level{n}"
+
+
+def _select_frame(table, col):
+    if col in table.columns:
+        return table[col]
+    else:
+        table.index.to_frame()[col]
+
+
+def _label_character_replacement(label):
+    return label.replace(
+        '#', '_'
+    ).replace(
+        '-', '_'
+    ).replace(
+        '@', 'at'
+    ).replace(
+        '(', '_'
+    ).replace(
+        ')', '_'
+    ).strip(
+        ''
+    ).replace(
+        '', '_'
+    ).replace(
+        '"', ''
+    ).replace(
+        "'", ''
+    ).replace(
+        "`", ''
+    ).replace(
+        "%", "perc"
+    ).replace(
+        '$', 'Dollar'
+    ).replace(
+        '&', '_and_'
+    ).replace(
+        '*', '_x_'
+    )
+
+
+def _mapping_variable_converter(table, arg, default_arg, name):
+    if isinstance(arg, dict):
+        arg = arg.copy()
+        default_arg = arg.pop(
+            '_default', default_arg
+        )
+        remaining = set(arg) - set(table.columns)
+        if remaining:
+            raise PuffbirdError(f"The '{name}' dictionary "
+                                f"contains keys that are not in "
+                                f"the columns {tuple(table.columns)}: "
+                                f"'{remaining}'")
+    else:
+        default_arg = arg
+        arg = {}
+    return arg, default_arg
+
+
+def _process_table_when_series(table):
+    if table.name is None:
+        if 'data_column' in table.index.names:
+            raise PuffbirdError("When table is a pandas.Series "
+                                "object, the index names cannot "
+                                "contain the name 'data_column'.")
+        return table.to_frame(name='data_column')
+    return table.to_frame()
+
+
+def _process_table_when_unknown_object(table):
+    try:
+        return pd.DataFrame(table)
+    except Exception as e:
+        raise PuffbirdError(f"Cannot convert 'table' argument of type "
+                            f"'{type(table)}' to dataframe: {e}")
+
+
+def _process_column_types(table, datacols, indexcols):
+    if datacols is None and indexcols is None:
+        # indexcols already in index
+        return table, datacols, indexcols
+
+    if indexcols is None:
+        indexcols = list(set(table.columns) - set(datacols))
+    elif datacols is None:
+        datacols = list(set(table.columns) - set(indexcols))
+
+    # no columns given that are not in dataframe
+    truth = set(datacols) - set(table.columns)
+    assert not truth, (
+        f'datacols contains columns not in dataframe: {truth}.'
+    )
+    truth = set(indexcols) - set(table.columns)
+    assert not truth, (
+        f'indexcols contains columns not in dataframe: {truth}.'
+    )
+    # keep original index for uniqueness
+    if not indexcols:
+        pass
+    else:
+        table.set_index(indexcols, append=True, inplace=True)
+
+    # if only a few columns were selected
+    if set(table.columns) - set(datacols):
+        table = table[datacols]
+
+    # return
+    return table, datacols, indexcols
+
+
+def _enforce_identifier_column_types(
+    table, handle_column_types, enforce_identifier_string
+):
+    # if not handling column types
+    if not handle_column_types:
+        return table
+
+    # convert data columns
+    datacols_rename = {}
+    for datacol in table.columns:
+        if isinstance(datacol, str):
+            if not enforce_identifier_string:
+                new_datacol = datacol
+            elif datacol.isdigit():
+                new_datacol = 'data_column_' + datacol
+            else:
+                # replace various characters
+                new_datacol = _label_character_replacement(datacol)
+        elif isinstance(datacol, int):
+            new_datacol = f'data_column_{datacol}'
         else:
-            default_reduce_method = reduce_method
-            reduce_method = {}
-        return reduce_method, default_reduce_method
+            raise PuffbirdError(f"Datacolumn must string or integer "
+                                f"but is type: {type(datacol)}.")
+
+        if datacol != new_datacol:
+            datacols_rename[datacol] = new_datacol
+
+    # rename columns
+    if datacols_rename:
+        table.rename(columns=datacols_rename, inplace=True)
+
+    # convert index columns
+    indexcols_rename = {}
+    for idx, indexcol in enumerate(table.index.names):
+        if indexcol is None:
+            new_indexcol = 'index_column_' + idx
+        elif isinstance(indexcol, str):
+            if not enforce_identifier_string:
+                new_indexcol = indexcol
+            elif indexcol.isdigit():
+                new_indexcol = 'index_column_' + indexcol
+            else:
+                # replace various characters
+                new_indexcol = _label_character_replacement(indexcol)
+        elif isinstance(indexcol, int):
+            new_indexcol = f'index_column_{indexcol}'
+        else:
+            raise PuffbirdError(f"Indexcolumn must string or integer "
+                                f"but is type: {type(indexcol)}.")
+
+        if indexcol != new_indexcol:
+            indexcols_rename[indexcol] = new_indexcol
+
+    # rename indices
+    if indexcols_rename:
+        table.rename_axis(index=indexcols_rename, inplace=True)
+
+    return table
+
+
+def _check_table_column_types(table, enforce_identifier_string):
+    # columns and index names must be identifier string types
+    for datacol in table.columns:
+        if not isinstance(datacol, str):
+            raise PuffbirdError(f"Datacolumn '{datacol}' is not a "
+                                f"string type: {type(datacol)}")
+        if not datacol.isidentifier() and enforce_identifier_string:
+            raise PuffbirdError(f"Datacolumn '{datacol}' is not a "
+                                f"identifier string type.")
+    if len(set(table.columns)) != len(table.columns):
+        raise PuffbirdError(f"Datacols '{tuple(table.columns)}' "
+                            f"are not unique.")
+    for indexcol in table.index.names:
+        if not isinstance(indexcol, str):
+            raise PuffbirdError(f"Indexcolumn '{indexcol}' is not a "
+                                f"string type: {type(indexcol)}")
+        if not indexcol.isidentifier() and enforce_identifier_string:
+            raise PuffbirdError(f"Indexcolumn '{indexcol}' is not a"
+                                f"identifier string type.")
+        for datacol in table.columns:
+            if _datacol_rematch(datacol, indexcol):
+                raise PuffbirdError(f"Indexcolumn '{indexcol}' matches "
+                                    f"datacol '{datacol}': Indexcol "
+                                    f"cannot start the same way as "
+                                    f"datacol.")
+    if len(set(table.index.names)) != len(table.index.names):
+        raise PuffbirdError(f"Indexcols '{tuple(table.index.names)}' "
+                            f"are not unique.")
+
+
+def _check_shared_axes_argument(shared_axes, datacols, indexcols):
+    for key, shared in shared_axes.items():
+        # must be dictionary
+        if not isinstance(shared, dict):
+            raise PuffbirdError(f"All shared axes arguments must be "
+                                f"dictionaries, but the value for key "
+                                f"'{key}' is of type '{type(shared)}'")
+        # keys must be in columns
+        not_in_columns = set(shared) - set(datacols)
+        if not_in_columns:
+            raise PuffbirdError(f"All keys of the dictionary of a shared "
+                                f"axes argument must be present in the "
+                                f"'datacols' {datacols}; these keys "
+                                f"are not in columns: '{not_in_columns}'.")
+        # keys must be unique
+        key_is_unique = (
+            all(_datacol_rematch(datacol, key)
+                for datacol in datacols)
+            and key not in indexcols
+        )
+        if not key_is_unique:
+            raise PuffbirdError(f"The keyword '{key}' is not unique: "
+                                f"It must not exist in in the 'datacols' "
+                                f"{datacols} or the 'indexcols' "
+                                f"{indexcols}, and it cannot start "
+                                f"the same way as any 'datacolumn' in "
+                                f"the dataframe.")
