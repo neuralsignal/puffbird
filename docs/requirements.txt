@@ -14,3 +14,5 @@ nbconvert
 pandoc
 flake8
 pandas
+gitpython
+pygithub
