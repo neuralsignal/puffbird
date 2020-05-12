@@ -236,7 +236,7 @@ class FrameEngine:
 
     def cols_to_long(self, *cols: str, **kwargs) -> pd.DataFrame:
         """
-        Same as :py:meth:`~FrameEngide.to_long` but only applied to
+        Same as :meth:`~FrameEngide.to_long` but only applied to
         specific columns.
 
         See Also
