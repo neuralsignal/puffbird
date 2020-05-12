@@ -9,6 +9,6 @@ Development
 .. toctree::
    :maxdepth: 2
 
-   environment
-   style_guide
    contributing
+   style_guide
+   authors
