@@ -5,7 +5,7 @@
 import pytest
 
 
-from puffbird import puffbird
+from puffbird.frame import FrameEngine
 
 
 @pytest.fixture

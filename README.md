@@ -1,4 +1,4 @@
-# Puffbird
+# [WIP] Puffbird
 ## Handling and transforming *"puffy"* pandas.DataFrame objects
 
 ## Requirements

@@ -21,6 +21,7 @@ puffbird documentation
 :mod:`puffbird` is an open source, MIT-licensed library providing an extension to handling
 *puffy*
 `pandas <https://pandas.pydata.org/>`__ DataFrame objects.
+For creating the documentation for :mod:`puffbird`, I used pandas documentation style.
 
 .. raw:: html
 

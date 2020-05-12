@@ -1,5 +1,5 @@
 include AUTHORS.md
-include CONTRIBUTING.rmd
+include CONTRIBUTING.md
 include HISTORY.md
 include LICENSE
 include README.md
