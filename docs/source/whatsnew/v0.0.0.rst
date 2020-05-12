@@ -1,15 +1,9 @@
 .. _whatsnew_0100:
 
-Version 0.0.0 (April 5, 2020)
+Version 0.0.0 (May 12, 2020)
 -----------------------------
 
 {{ header }}
 
 
-This is a major release from 0.0.0 and includes many new features and
-enhancements along with a large number of bug fixes. There are also a number of
-important API changes that long-time pandas users should pay close attention
-to.
-
-File parsing new features
-~~~~~~~~~~~~~~~~~~~~~~~~~
+TODO
