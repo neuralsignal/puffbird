@@ -1,0 +1,12 @@
+pip
+bump2version
+wheel
+watchdog
+flake8
+tox
+coverage
+twine
+pandas>=0.25.3
+
+pytest==4.6.5
+pytest-runner==5.1

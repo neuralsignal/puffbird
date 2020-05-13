@@ -21,8 +21,8 @@ Installation
                 <div class="card-body">
                     <p class="card-text">
 
-pandas is part of the `Anaconda <https://docs.continuum.io/anaconda/>`__ distribution and can be
-installed with Anaconda or Miniconda:
+puffbird can be installed using
+`anaconda <https://docs.continuum.io/anaconda/>`__:
 
 .. raw:: html
 
@@ -32,7 +32,7 @@ installed with Anaconda or Miniconda:
 
 .. code-block:: bash
 
-   conda install pandas
+   conda install puffbird
 
 .. raw:: html
 
@@ -47,7 +47,7 @@ installed with Anaconda or Miniconda:
                 <div class="card-body">
                     <p class="card-text">
 
-pandas can be installed via pip from `PyPI <https://pypi.org/project/pandas>`__.
+puffbird can be installed via pip from `PyPI <https://pypi.org/project/puffbird>`__.
 
 .. raw:: html
 
@@ -57,7 +57,7 @@ pandas can be installed via pip from `PyPI <https://pypi.org/project/pandas>`__.
 
 .. code-block:: bash
 
-   pip install pandas
+   pip install puffbird
 
 .. raw:: html
 
@@ -91,7 +91,7 @@ pandas can be installed via pip from `PyPI <https://pypi.org/project/pandas>`__.
 Intro to Puffbird
 -----------------
 
-Something something.
+TODO
 
 
 .. toctree::

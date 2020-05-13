@@ -18,7 +18,7 @@ Using foo.__class__
 -------------------
 
 
-pandas uses 'type(foo)' instead 'foo.__class__' as it is making the code more
+puffbird uses 'type(foo)' instead 'foo.__class__' as it is making the code more
 readable.
 For example:
 
@@ -46,7 +46,7 @@ Concatenated strings
 Using f-strings
 ~~~~~~~~~~~~~~~
 
-pandas uses f-strings formatting instead of '%' and '.format()' string formatters.
+puffbird uses f-strings formatting instead of '%' and '.format()' string formatters.
 
 The convention of using f-strings on a string that is concatenated over several lines,
 is to prefix only the lines containing values which need to be interpreted.
@@ -110,7 +110,7 @@ For example:
 Representation function (aka 'repr()')
 --------------------------------------
 
-pandas uses 'repr()' instead of '%r' and '!r'.
+puffbird uses 'repr()' instead of '%r' and '!r'.
 
 The use of 'repr()' will only happen when the value is not an obvious string.
 
@@ -137,7 +137,7 @@ Imports (aim for absolute)
 In Python 3, absolute imports are recommended. Using absolute imports, doing something
 like ``import string`` will import the string module rather than ``string.py``
 in the same directory. As much as possible, you should try to write out
-absolute imports that show the whole import chain from top-level pandas.
+absolute imports that show the whole import chain from top-level puffbird.
 
 Explicit relative imports are also supported in Python 3 but it is not
 recommended to use them. Implicit relative imports should never be used

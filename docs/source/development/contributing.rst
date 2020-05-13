@@ -66,9 +66,11 @@ Ready to contribute? Here's how to set up `puffbird` for local development.
 
     $ git clone git@github.com:your_name_here/puffbird.git
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
+3. Install your local copy into a virtualenv or a conda environment.
+   Assuming you have virtualenvwrapper or conda installed (called puffbird),
+   this is how you set up your fork for local development::
 
-    $ mkvirtualenv puffbird
+    $ mkvirtualenv puffbird or conda activate puffbird
     $ cd puffbird/
     $ python setup.py develop
 

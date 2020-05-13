@@ -395,6 +395,8 @@ if pattern is None:
         "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
         "statsmodels": ("https://www.statsmodels.org/devel/", None),
         "pyarrow": ("https://arrow.apache.org/docs/", None),
+        "seaborn": ("https://seaborn.pydata.org", None),
+        "datajoint": ("https://docs.datajoint.io/python/", None)
     }
 
 # extlinks alias

@@ -18,6 +18,7 @@ puffbird.FrameEngine
       FrameEngine.cols_to_long
       FrameEngine.drop
       FrameEngine.expand_col
+      FrameEngine.multid_pivot
       FrameEngine.rename
       FrameEngine.to_long
       FrameEngine.to_puffy
