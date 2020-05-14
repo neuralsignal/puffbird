@@ -9,12 +9,13 @@ plotting and groupby computations.
 import re
 from typing import (
     Dict, Union, Optional,
-    Collection, Sequence
+    Collection, Sequence, Callable
 )
 from numbers import Number
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_list_like
 
 from puffbird.err import PuffbirdError
 from puffbird.utils import series_is_hashable
@@ -32,7 +33,8 @@ DATACOL_REGEX = "{datacol}(_level)?[1-9]*$"
 # iterable handles dicts and pandas series correctly
 DEFAULT_ITERABLE = CallableContainer(iter)
 DEFAULT_ITERABLE.add(lambda x: iter(x), (np.ndarray, set))
-DEFAULT_ITERABLE.add(lambda x: x, (dict, pd.Series, Number, list, tuple))
+DEFAULT_ITERABLE.add(lambda x: x, (dict, pd.Series, list, tuple))
+DEFAULT_ITERABLE.add(lambda x: pd.Series({np.nan: x}), (Number, str, bytes))
 DEFAULT_ITERABLE.add(
     # stacks all columns
     lambda x: x.stack(level=list(range(x.columns.nlevels))),
@@ -75,12 +77,13 @@ class FrameEngine:
     inplace : bool, optional
         If possible do not copy the `table` object. Defaults to False.
     handle_column_types : bool, optional
-        If True, try to convert string column types into identifier strings.
-        Integer and tuple column types will always be converted to
-        string column types. Defaults to True.
+        If True, converts not string column types to strings. Defaults to True.
     enforce_identifier_string : bool, optional
-        If True, check if all columns are identifier string types and throw
-        an error if this is not the case. Defaults to True.
+        If True, try to convert all types to identifier string types
+        and check if all columns are identifier string types.
+        Enforcement only works if column types are :obj:`str`,
+        :obj:`numbers.Number`, or :obj:`tuple` object types.
+        Throw an error if enforcement does not work. Defaults to False.
 
     Notes
     -----
@@ -147,8 +150,20 @@ class FrameEngine:
         indexcols: Optional[Collection] = None,
         inplace: bool = False,
         handle_column_types: bool = True,
-        enforce_identifier_string: bool = True
+        enforce_identifier_string: bool = False,
+        fastpath: bool = False
     ):
+        # used internally
+        if fastpath:
+            self._table = table
+            self._datacols_rename = {}
+            self._indexcols_rename = {}
+            return
+
+        if isinstance(table, type(self)):
+            table = table.table
+
+        # check table type
         if isinstance(table, pd.Series):
             table = _process_table_when_series(table)
         elif not isinstance(table, pd.DataFrame):
@@ -171,11 +186,16 @@ class FrameEngine:
 
         # table index must be a multiindex
         if not isinstance(table.index, pd.MultiIndex):
-            table.index = pd.MultiIndex.from_frame(table.index.to_frame())
+            table.index = pd.MultiIndex.from_frame(
+                table.index.to_frame(
+                    name=('index_level0' if table.index.name is None else None)
+                )
+            )
 
-        table = _enforce_identifier_column_types(
-            table, handle_column_types, enforce_identifier_string
-        )
+        table, datacols_rename, indexcols_rename = \
+            _enforce_identifier_column_types(
+                table, handle_column_types, enforce_identifier_string
+            )
 
         # check table index and column types
         _check_table_column_types(table, enforce_identifier_string)
@@ -187,6 +207,9 @@ class FrameEngine:
 
         # assign table
         self._table = table
+        # used internally
+        self._datacols_rename = datacols_rename
+        self._indexcols_rename = indexcols_rename
 
     @property
     def table(self):
@@ -217,15 +240,100 @@ class FrameEngine:
         """
         return tuple(self._table.index.names)
 
+    @property
+    def cols(self):
+        """
+        Tuple of *"data columns"* and  *"index columns"* in the `table`.
+        """
+        return self.datacols + self.indexcols
+
     def __repr__(self):
         return self.table.__repr__()
 
     def __str__(self):
         return self.table.__str__()
 
+    @property
+    def datacols_rename(self):
+        """
+        Mapping of renamed *"data columns"* in `table`.
+        """
+        self._datacols_rename.pop(None, None)
+        return {
+            original_value: renamed_value
+            for original_value, renamed_value
+            in self._datacols_rename.items()
+            if renamed_value in self.datacols
+            and original_value not in self.cols
+        }
+
+    @property
+    def indexcols_rename(self):
+        """
+        Mapping of renamed *"index columns"* in `table`.
+        """
+        self._indexcols_rename.pop(None, None)
+        return {
+            original_value: renamed_value
+            for original_value, renamed_value
+            in self._indexcols_rename.items()
+            if renamed_value in self.indexcols
+            and original_value not in self.cols
+        }
+
+    @property
+    def cols_rename(self):
+        """
+        Mapping of renamed *"data columns"* and *"index columns"* in `table`.
+        """
+        return {
+            **self.datacols_rename,
+            **self.indexcols_rename
+        }
+
+    def _substitute_datacols(self, cols):
+        """
+        Rename columns appropriately as in the `table` using the internal
+        variables `_datacols_rename`
+        """
+        return [
+            self._substitute_datacol(col)
+            for col in cols
+        ]
+
+    def _substitute_datacol(self, col):
+        return self.datacols_rename.get(col, col)
+
+    def _substitute_indexcols(self, cols):
+        """
+        Rename columns appropriately as in the `table` using the internal
+        variables `_indexcols_rename`
+        """
+        return [
+            self._substitute_indexcol(col)
+            for col in cols
+        ]
+
+    def _substitute_indexcol(self, col):
+        return self.indexcols_rename.get(col, col)
+
+    def _substitute_cols(self, cols):
+        """
+        Rename columns appropriately as in the `table` using the internal
+        variables `_indexcols_rename` and `_datacols_rename`
+        """
+        return [
+            self._substitute_col(col)
+            for col in cols
+        ]
+
+    def _substitute_col(self, col):
+        return self.cols_rename.get(col, col)
+
     def to_long(
-        self, *,
-        iterable: Union[callable, Dict[str, callable]] = DEFAULT_ITERABLE,
+        self,
+        *cols: str,
+        iterable: Union[Callable, Dict[str, Callable]] = DEFAULT_ITERABLE,
         max_depth: Union[int, Dict[str, int]] = DEFAULT_MAX_DEPTH,
         dropna: bool = True,
         reindex: bool = False,
@@ -239,6 +347,9 @@ class FrameEngine:
 
         Parameters
         ----------
+        cols : str
+            A selection of *"data columns"* to create the long dataframe with.
+            If not given, the algorithm will use all *"data columns"*.
         iterable : callable or dict of callables, optional
             This function is called on each cell for each *"data column"*
             to create a new :obj:`~pandas.Series` object.
@@ -307,7 +418,6 @@ class FrameEngine:
 
         See Also
         --------
-        FrameEngine.cols_to_long
         puffy_to_long
 
         Notes
@@ -336,21 +446,23 @@ class FrameEngine:
         a `long-format` :obj:`~pandas.DataFrame`:
 
         >>> engine.to_long()
-            index_col_0 b_level0  b_level1     b  a_level0    a
-        0             0        c         0  asdf         0  1.0
-        1             0        c         0  asdf         1  2.0
-        2             0        c         0  asdf         2  3.0
-        3             0        d         0   ret         0  1.0
-        4             0        d         0   ret         1  2.0
-        5             0        d         0   ret         2  3.0
-        6             1        d         0     r         0  4.0
-        7             1        d         0     r         1  5.0
-        8             1        d         0     r         2  6.0
-        9             1        d         0     r         3  7.0
-        10            2        c         0    ff         0  3.0
-        11            2        c         0    ff         1  4.0
-        12            2        c         0    ff         2  5.0
+            index_level0  a_level0    a b_level0  b_level1     b
+        0              0         0  1.0        c         0  asdf
+        1              0         0  1.0        d         0   ret
+        2              0         1  2.0        c         0  asdf
+        3              0         1  2.0        d         0   ret
+        4              0         2  3.0        c         0  asdf
+        5              0         2  3.0        d         0   ret
+        6              1         0  4.0        d         0     r
+        7              1         1  5.0        d         0     r
+        8              1         2  6.0        d         0     r
+        9              1         3  7.0        d         0     r
+        10             2         0  3.0        c         0    ff
+        11             2         1  4.0        c         0    ff
+        12             2         2  5.0        c         0    ff
         """
+        if cols:
+            self = self[cols]
 
         expand_cols = [] if expand_cols is None else expand_cols
         truth = set(expand_cols) - set(self.datacols)
@@ -433,16 +545,26 @@ class FrameEngine:
         # series.index is already assumed to be multi index
         # transform into dataframe
         # this should automatically infer types
-        table = series.apply(
-            lambda x: pd.Series(iterable(x)),
-            convert_dtype=True
-        )
+        try:
+            table = series.apply(
+                lambda x: pd.Series(iterable(x)),
+                convert_dtype=True
+            )
+        except BaseException:
+            # reassign handled dataframes
+            # test: print("before:\n", series.iloc[0], "\n")
+            _handle_unstructured_dataframes_in_series(series)
+            # test: print("after:\n", series.iloc[0], "\n")
+            table = series.apply(
+                lambda x: pd.Series(iterable(x)),
+                convert_dtype=True
+            )
         # rename columns and stack dataframe
         if isinstance(table.columns, pd.MultiIndex):
             # rename columns properly
             # give columns index a name
             column_names = []
-            for index, name in table.columns.names:
+            for index, name in enumerate(table.columns.names):
                 if name is None:
                     name = f"{col_name}_{index}"
                 else:
@@ -454,8 +576,14 @@ class FrameEngine:
                 inplace=True
             )
             # stack all columns
-            levels = list(range(table.columns.nlevels))
-            series = table.stack(levels=levels, dropna=dropna)
+            try:
+                levels = list(range(table.columns.nlevels))
+                series = table.stack(level=levels, dropna=dropna)
+            except ValueError:
+                # try to iteratively stack if failure
+                series = table.stack(dropna=dropna)
+                while isinstance(series, pd.DataFrame):
+                    series = series.stack(dropna=dropna)
         else:
             # give columns index a name
             table.columns.name = (
@@ -470,144 +598,36 @@ class FrameEngine:
         return series
 
     def __getitem__(self, key):
+        """index *"data columns"*
+        """
         # if it is a dataframe return new instance of FrameEngine
-        # TODO indexing indexcolumns
-        selected_table = self.table[key]
+        if is_list_like(key):
+            key = self._substitute_datacols(key)
+        else:
+            key = self._substitute_datacol(key)
+
+        selected_table = self.table.loc[:, key]
 
         if isinstance(selected_table, pd.DataFrame):
             # creates a new instance
-            return type(self)(selected_table)
+            new_self = type(self)(selected_table, fastpath=True)
+            new_self._datacols_rename = {
+                original_value: renamed_value
+                for original_value, renamed_value
+                in self.datacols_rename.items()
+                if renamed_value in new_self.datacols
+            }
+            new_self._indexcols_rename = self.indexcols_rename
+            return new_self
         else:
             return selected_table
-
-    def cols_to_long(self, *cols: str, **kwargs) -> pd.DataFrame:
-        """
-        Transform the *"puffy"* table into a *long-format*
-        :obj:`~pandas.DataFrame`.
-
-        Parameters
-        ----------
-        cols : str
-            A list of *"data columns"* to create the long dataframe with.
-        iterable : callable or dict of callables, optional
-            This function is called on each cell for each *"data column"*
-            to create a new :obj:`~pandas.Series` object.
-            If the *"data columns"* contains :obj:`dict`, :obj:`list`,
-            :obj:`int`, :obj:`float`,
-            :obj:`~numpy.array`, :obj:`~numpy.recarray`,
-            :obj:`~pandas.DataFrame`, or :obj:`~pandas.Series` object types
-            than the default iterable will handle these appropriately.
-            When passing a dictionary of iterables, the keys should
-            correspond to values in :obj:`~FrameEngine.datacols` (i.e.
-            the *"data columns"* of the `table`). In this case, each column can
-            have a custom iterable used. If a column's iterable is not
-            specified the default iterable is used.
-        max_depth : int or dict of ints, optional
-            Maximum depth of expanding each cell, before the algorithm stops
-            for each *"data column"*. If we set the max_depth to 3,
-            for example,
-            a *"data column"* consisting of 4-D :obj:`~numpy.array` objects
-            will result in a :obj:`~pandas.DataFrame`
-            where the *"data column"* cells contain
-            1-D :obj:`~numpy.array` objects.
-            If the arrays were 3-D, it will result in a
-            long dataframe with scalars in each cell.
-            Defaults to 3.
-        dropna : bool, optional
-            Drop rows in *long-format* :obj:`~pandas.DataFrame`,
-            where **all** *"data columns"* are NaNs.
-        cond : callable or dict of callables, optional
-            This function should return `True` or `False` and accept a
-            :obj:`~pandas.Series` object as an argument. If True, the algorithm
-            will stop *"exploding"* a *"data column"*. The default `cond`
-            argument suffices for all non-hashable types, such as
-            :obj:`list` or :obj:`~numpy.array` objects. If you want
-            to *"explode"* hashable types such as :obj:`tuple` objects, a
-            custom `cond` callable has to be defined. However, it is
-            recommended that hashable types are first converted into non-hashable
-            types using a custom conversion function and the
-            :obj:`~FrameEngine.col_apply` method.
-        expand_cols : list-like, optional
-            Specify a list of *"data columns"* to apply the
-            :obj:`~FrameEngine.expand_col` method instead of *"exploding"*
-            the column in the table.
-            If all cells within a *"data column"* contains similarly
-            constructed
-            :obj:`~pandas.DataFrame` or :obj:`~pandas.Series` object types,
-            the :obj:`~FrameEngine.expand_col` method can be used instead
-            of *"exploding"* the *"data column"*. Default to None.
-        shared_axes : dict, optional
-            Specify if two or more *"data columns"* share axes
-            (i.e. *"explosion"* iterations). The keyword
-            will correspond to what the column will be called in the long
-            dataframe. Each argument is a dictionary where the keys
-            correspond to the names of the *"data columns"*, which share
-            an axis, and the value correspond to the depth/axis is shared
-            for each *"data column"*. `shared_axis` argument is usually defined
-            for *"data columns"* that contain :obj:`~numpy.array` objects.
-            For example, one *"data column"* may consists of one-dimensional
-            timestamp arrays and another *"data column"* may consist of
-            two-dimensional timeseries arrays where the first axis of the
-            latter is shared with the zeroth axis of the former.
-
-        Returns
-        -------
-        :obj:`~pandas.DataFrame`
-            A `long-format` :obj:`~pandas.DataFrame`.
-
-        See Also
-        --------
-        FrameEngine.to_long
-        puffy_to_long
-
-        Notes
-        -----
-        If you find yourself writing custom `iterable` and `cond` arguments
-        and believe these may be of general use, please open an
-        `issue <https://github.com/gucky92/puffbird/issues>`_ or
-        start a pull request.
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> import puffbird as pb
-        >>> df = pd.DataFrame({
-        ...     'a': [[1,2,3], [4,5,6,7], [3,4,5]],
-        ...     'b': [{'c':['asdf'], 'd':['ret']}, {'d':['r']}, {'c':['ff']}],
-        ... })
-        >>> df
-                      a                              b
-        0     [1, 2, 3]  {'c': ['asdf'], 'd': ['ret']}
-        1  [4, 5, 6, 7]                   {'d': ['r']}
-        2     [3, 4, 5]                  {'c': ['ff']}
-        >>> engine = pb.FrameEngine(df)
-
-        Now we can use the :obj:`~FrameEngine.cols_to_long` method to create
-        a `long-format` :obj:`~pandas.DataFrame`:
-
-        >>> engine.cols_to_long('a', 'b')
-            index_col_0 b_level0  b_level1     b  a_level0    a
-        0             0        c         0  asdf         0  1.0
-        1             0        c         0  asdf         1  2.0
-        2             0        c         0  asdf         2  3.0
-        3             0        d         0   ret         0  1.0
-        4             0        d         0   ret         1  2.0
-        5             0        d         0   ret         2  3.0
-        6             1        d         0     r         0  4.0
-        7             1        d         0     r         1  5.0
-        8             1        d         0     r         2  6.0
-        9             1        d         0     r         3  7.0
-        10            2        c         0    ff         0  3.0
-        11            2        c         0    ff         1  4.0
-        12            2        c         0    ff         2  5.0
-        """
-        return self[list(cols)].tolong(**kwargs)
 
     def expand_col(
         self,
         col: str,
         reset_index: bool = True,
         dropna: bool = True,
+        handle_diff: bool = True
     ) -> pd.DataFrame:
         """
         Expand a column that contain
@@ -625,6 +645,9 @@ class FrameEngine:
             Whether to drop NaNs in the *"data column"*. If False and
             NaNs exist, this will currently result in an error.
             Defaults to True.
+        handle_diff : bool, optional
+            Handle indices across column cells, if they cannot be
+            concatenatted, instead of throwing an error. Defaults to True.
 
         Returns
         -------
@@ -634,30 +657,47 @@ class FrameEngine:
         See Also
         --------
         FrameEngine.to_long
-        FrameEngine.cols_to_long
         puffy_to_long
         """
 
         if dropna:
-            series = self.table[col].dropna()
+            series = self.table.loc[:, self._substitute_datacol(col)].dropna()
         else:
             # produces an error if nan's are in the series
-            series = self.table[col]
+            series = self.table.loc[:, self._substitute_datacol(col)]
 
-        long_df = pd.concat(
-            list(series), keys=series.index,
-            names=series.index.names,
-            sort=False
-        )
+        try:
+            long_df = pd.concat(
+                list(series), keys=series.index,
+                names=series.index.names,
+                sort=False
+            )
 
-        if reset_index:
-            return long_df.reset_index()
-        else:
-            return long_df
+            if reset_index:
+                return long_df.reset_index()
+            else:
+                return long_df
+
+        except BaseException:
+            if handle_diff:
+                # if multiIndex are not aligned just reset the index
+                _handle_unstructured_dataframes_in_series(series)
+                long_df = pd.concat(
+                    list(series),
+                    keys=series.index,
+                    names=series.index.names,
+                    sort=False,
+                )
+
+                if reset_index:
+                    return long_df.reset_index()
+                else:
+                    return long_df
+            raise
 
     def col_apply(
         self,
-        func: callable,
+        func: Callable,
         col: str,
         new_col_name: Optional[str] = None,
         assign_to_index: Optional[bool] = None,
@@ -687,12 +727,16 @@ class FrameEngine:
         -------
         self
         """
+
+        # substitute column if renamed
+        col = self._substitute_col(col)
+
         if new_col_name is None:
             new_col_name = col
         if assign_to_index is None:
             assign_to_index = col in self.indexcols
         # apply function
-        series = _select_frame(self.table, col).apply(func, **kwargs)
+        series = self._select_frame(col).apply(func, **kwargs)
         if isinstance(series, pd.DataFrame):
             raise PuffbirdError("The function 'func' cannot return "
                                 "a `pandas.Series` object.")
@@ -702,8 +746,8 @@ class FrameEngine:
 
     def apply(
         self,
-        func: callable,
-        new_col_name: Optional[callable],
+        func: Callable,
+        new_col_name: Optional[str],
         *args: str,
         assign_to_index: bool = False,
         map_kws: Optional[Dict[str, str]] = None,
@@ -718,7 +762,7 @@ class FrameEngine:
             Function to apply. The function cannot return a
             :obj:`~pandas.Series` object.
         new_col_name : str
-            Name of computed new col. If None, `new_col_name` will be
+            Name of computed new column. If None, `new_col_name` will be
             "apply_result".
         args : tuple
             Arguments passed to function. Each argument should be an
@@ -743,8 +787,8 @@ class FrameEngine:
         # apply function
         series = self.table.reset_index().apply(
             lambda x: func(
-                *(x[arg] for arg in args),
-                **{key: x[arg] for key, arg in map_kws.items()},
+                *(x[self._substitute_col(col)] for col in args),
+                **{key: x[self._substitue_col(col)] for key, col in map_kws.items()},
                 **kwargs
             ),
             axis=1, result_type="reduce"
@@ -763,10 +807,10 @@ class FrameEngine:
         if assign_to_index:
             if new_col_name in self.indexcols:
                 index = self.table.index.to_frame(False)
-                index[new_col_name] = series
+                index.loc[:, new_col_name] = series
                 self.table.index = pd.MultiIndex.from_frame(index)
             else:
-                self.table[new_col_name] = series
+                self.table.loc[:, new_col_name] = series
                 self.table.set_index(
                     [new_col_name],
                     drop=True,
@@ -780,11 +824,11 @@ class FrameEngine:
                                     "assigned to index columns; cannot "
                                     "assign to data columns. Choose "
                                     "different name.")
-            self.table[new_col_name] = series
+            self.table.loc[:, new_col_name] = series
 
     def drop(
         self,
-        *columns: str,
+        *cols: str,
         skip: bool = False,
         skip_index: bool = False,
         skip_data: bool = False
@@ -794,10 +838,15 @@ class FrameEngine:
 
         Parameters
         ----------
-        columns : str
+        cols : str
+            Columns to drop.
         skip : bool
+            If True, skip values in `cols` that do not match with
+            any columns. Defaults to False.
         skip_index : bool
+            If True, skip dropping *"index columns"*. Defaults to False.
         skip_data : bool
+            If True, skip dropping *"data columns"*. Defaults to False.
 
         Returns
         -------
@@ -807,6 +856,8 @@ class FrameEngine:
         --------
         pandas.DataFrame.drop
         """
+        # substitute renamed columns
+        columns = self._substitute_cols(cols)
         not_found = set(columns) - (set(self.datacols) | set(self.indexcols))
         if not_found and not skip:
             raise PuffbirdError(f"Columns '{not_found}' are not in "
@@ -817,6 +868,13 @@ class FrameEngine:
                 columns=datacols,
                 inplace=True
             )
+            # reassign renamed columns
+            self._datacols_rename = {
+                original_value: renamed_value
+                for original_value, renamed_value
+                in self.datacols_rename.items()
+                if renamed_value not in datacols
+            }
         indexcols = set(columns) & set(self.indexcols)
         if indexcols and not skip_index:
             index = self.table.index.to_frame()
@@ -829,6 +887,13 @@ class FrameEngine:
                 raise PuffbirdError(f"Dropping index columns '{indexcols}' "
                                     "results in non-unique indices.")
             self.table.index = index
+            # reassign renamed columns
+            self._indexcols_rename = {
+                original_value: renamed_value
+                for original_value, renamed_value
+                in self.indexcols_rename.items()
+                if renamed_value not in indexcols
+            }
         return self
 
     def rename(
@@ -841,6 +906,7 @@ class FrameEngine:
         Parameters
         ----------
         rename_kws : dict
+            Mapping of old column names to new column names.
 
         Returns
         -------
@@ -850,6 +916,10 @@ class FrameEngine:
         --------
         pandas.DataFrame.rename
         """
+        rename_kws = {
+            self._substitute_col(old): new
+            for old, new in rename_kws.items()
+        }
 
         self.table.rename(
             columns=rename_kws,
@@ -859,43 +929,72 @@ class FrameEngine:
             index=rename_kws,
             inplace=True
         )
+
+        # update renames (pop renames)
+        self._indexcols_rename = {
+            original_value: renamed_value
+            for original_value, renamed_value
+            in self.indexcols_rename.items()
+            if renamed_value in rename_kws
+        }
+        self._datacols_rename = {
+            original_value: renamed_value
+            for original_value, renamed_value
+            in self.datacols_rename.items()
+            if renamed_value in rename_kws
+        }
         return self
 
     def to_puffy(
         self,
         *indexcols: str,
         keep_missing_idcs: bool = True,
-        aggfunc: Union[callable, Dict[str, callable]] = DEFAULT_AGGFUNC,
-        dropna: bool = True,
-        inplace: bool = False
-    ):
+        aggfunc: Union[Callable, Dict[str, Callable]] = DEFAULT_AGGFUNC,
+        dropna: bool = True
+    ) -> pd.DataFrame:
         """
         Make the `table` *"puffier"* by aggregating across unique sets of
-        *"index columns"*
+        *"index columns"*.
+
+        .. warning::
+
+            :obj:`~FrameEngine.to_puffy` is currently an experimental method
+            and so it may change significantly in future releases.
 
         Parameters
         ----------
         indexcols : str
+            Set of *"index columns"* to aggregate over using
+            :obj:`~pandas.DataFrame.groupby`.
         keep_missing_idcs : bool, optional
+            If True, aggregate index columns not in the `indexcols` argument.
+            Defaults to True.
         aggfunc : callable or dict of callables, optional
+            The function used to aggregate *"data columns"* and any
+            missing indices. Defaults to list.
         dropna : bool, optional
-        inplace : bool, optional
+            Drop NaNs in table before aggregating.
 
         Returns
         -------
         :obj:`~pandas.DataFrame`
+
+        See Also
+        --------
+        FrameEngine.to_long
         """
         # TODO shared axes? - proper long to puffy method
+        indexcols = self._substitute_indexcols(indexcols)
 
         if keep_missing_idcs:
             table = self.table.reset_index(
                 level=list(set(self.indexcols)-set(indexcols))
             )
-        elif not inplace:
-            table = self.table.copy()
+        else:
+            table = self.table
         # drop nanas
         if dropna:
-            table.dropna(inplace=True)
+            table = table.dropna()
 
         aggfunc, default_aggfunc = _mapping_variable_converter(
             table, aggfunc, DEFAULT_AGGFUNC, "aggfunc")
@@ -916,13 +1015,38 @@ class FrameEngine:
 
     def multid_pivot(self, values=None, *dims):
         """
-        Not Yet Implemented!
+        Pivot the `table` to create a multidimensional
+        :obj:`xarray.DataArray` or :obj:`xarray.DataSet` object.
+
+        .. warning::
+
+            This method has not yet been implemented. It will be
+            defined in future releases.
         """
         # TODO long frame to xarray? - multidimensional pivot
         raise NotImplementedError("multid_pivot")
 
+    def _select_frame(self, col):
+        # assumes column has already be substituted
+        if col in self.table.columns:
+            return self.table.loc[:, col]
+        else:
+            return self.table.index.to_frame().loc[:, col]
+
 
 # --- helper functions ---
+
+
+def _handle_unstructured_dataframes_in_series(series):
+    """
+    Returns a list of the unstructured dataframe objects.
+    """
+    for object in series:
+        if not isinstance(object, (pd.Series, pd.DataFrame)):
+            raise
+        object.columns = object.columns.to_flat_index()
+        object.columns = [str(col) for col in object.columns]
+        object.reset_index(inplace=True)
 
 
 def _col_no_match(datacol, key):
@@ -938,26 +1062,21 @@ def _get_col_name(datacol, n, shared_axes):
     return f"{datacol}_level{n}"
 
 
-def _select_frame(table, col):
-    if col in table.columns:
-        return table[col]
-    else:
-        table.index.to_frame()[col]
-
-
 def _label_character_replacement(label):
     return label.strip(
         ''
     ).replace(
-        '#', '_'
+        '#', '_HASH_'
     ).replace(
-        '-', '_'
+        '-', '_MINUS_'
     ).replace(
-        '@', 'at'
+        '+', '_PLUS_'
     ).replace(
-        '(', '_'
+        '@', '_AT_'
     ).replace(
-        ')', '_'
+        '(', '_OPEN_'
+    ).replace(
+        ')', '_CLOSE_'
     ).replace(
         ' ', '_'
     ).replace(
@@ -967,23 +1086,37 @@ def _label_character_replacement(label):
     ).replace(
         "`", ''
     ).replace(
-        "%", "perc"
+        '%', '_PERCENT_'
     ).replace(
-        '$', 'Dollar'
+        '$', '_DOLLAR_'
     ).replace(
-        '&', '_and_'
+        '&', '_AND_'
     ).replace(
-        '*', '_x_'
+        '*', '_X_'
     ).replace(
-        ',', '_'
+        ',', '_COMMA_'
     ).replace(
-        ';', '_'
+        ';', '_SEMICOLON_'
     ).replace(
-        ':', '_'
+        ':', '_COLON_'
     ).replace(
-        '.', '_'
+        '.', '_DOT_'
     ).replace(
-        '?', '_'
+        '?', '_QUESTION_'
+    ).replace(
+        '|', '_OR_'
+    ).replace(
+        '~', '_CIRCA_'
+    ).replace(
+        '[', '_OPEN_'
+    ).replace(
+        ']', '_CLOSE_'
+    ).replace(
+        '{', '_OPEN_'
+    ).replace(
+        '}', '_CLOSE_'
+    ).replace(
+        '!', '_EXCLAIM_'
     )
 
 
@@ -1011,7 +1144,7 @@ def _process_table_when_series(table):
             raise PuffbirdError("When table is a pandas.Series "
                                 "object, the index names cannot "
                                 "contain the name 'data_column'.")
-        return table.to_frame(name='data_column')
+        return table.to_frame(name="data_column")
     return table.to_frame()
 
 
@@ -1068,7 +1201,7 @@ def _enforce_identifier_column_types(
     for datacol in table.columns:
         if isinstance(datacol, tuple):
             if not enforce_identifier_string:
-                new_datacol = ", ".join(datacol)
+                new_datacol = str(datacol)
             elif all(str(idata).isdigit() for idata in datacol):
                 new_datacol = "data_tuple_col_" + "_".join(datacol)
             else:
@@ -1082,8 +1215,14 @@ def _enforce_identifier_column_types(
             else:
                 # replace various characters
                 new_datacol = _label_character_replacement(datacol)
-        elif isinstance(datacol, int):
-            new_datacol = f"data_col_{datacol}"
+        elif isinstance(datacol, Number):
+            if not enforce_identifier_string:
+                new_datacol = str(datacol)
+            else:
+                new_datacol = f"index_number_{datacol}"
+                new_datacol = _label_character_replacement(new_datacol)
+        elif not enforce_identifier_string:
+            new_datacol = str(datacol)
         else:
             raise PuffbirdError("Datacolumn must string or integer "
                                 f"but is type: {type(datacol)}.")
@@ -1100,24 +1239,30 @@ def _enforce_identifier_column_types(
     for idx, indexcol in enumerate(table.index.names):
         if isinstance(indexcol, tuple):
             if not enforce_identifier_string:
-                new_indexcol = ", ".join(indexcol)
+                new_indexcol = str(indexcol)
             elif all(str(idx).isdigit() for idx in indexcol):
                 new_indexcol = "index_tuple_col_" + "_".join(indexcol)
             else:
                 # replace various characters
                 new_indexcol = _label_character_replacement("_".join(indexcol))
         elif indexcol is None:
-            new_indexcol = "index_new_col_" + idx
+            new_indexcol = f"index_level{idx}"
         elif isinstance(indexcol, str):
             if not enforce_identifier_string:
                 new_indexcol = indexcol
             elif indexcol.isdigit():
-                new_indexcol = "index_col_" + indexcol
+                new_indexcol = f"index_col_{indexcol}"
             else:
                 # replace various characters
                 new_indexcol = _label_character_replacement(indexcol)
-        elif isinstance(indexcol, int):
-            new_indexcol = f"index_col_{indexcol}"
+        elif isinstance(indexcol, Number):
+            if not enforce_identifier_string:
+                new_indexcol = str(indexcol)
+            else:
+                new_indexcol = f"index_number_{indexcol}"
+                new_indexcol = _label_character_replacement(new_indexcol)
+        elif not enforce_identifier_string:
+            new_indexcol = str(new_indexcol)
         else:
             raise PuffbirdError("Indexcolumn must string or integer "
                                 f"but is type: {type(indexcol)}.")
@@ -1129,7 +1274,7 @@ def _enforce_identifier_column_types(
     if indexcols_rename:
         table.rename_axis(index=indexcols_rename, inplace=True)
 
-    return table
+    return table, datacols_rename, indexcols_rename
 
 
 def _check_table_column_types(table, enforce_identifier_string):

@@ -5,7 +5,7 @@ various convenience functions
 from puffbird.frame import FrameEngine
 
 
-def puffy_to_long(table, **kwargs):
+def puffy_to_long(table, *cols, **kwargs):
     """
     Transform the *"puffy"* table into a *long-format*
     :obj:`~pandas.DataFrame`.
@@ -14,6 +14,9 @@ def puffy_to_long(table, **kwargs):
     ----------
     table : :obj:`~pandas.DataFrame`
         A table with *"puffy"* columns.
+    cols : str
+        A selection of *"data columns"* to create the long dataframe with.
+        If not given, the algorithm will use all *"data columns"*.
     iterable : callable or dict of callables, optional
         This function is called on each cell for each *"data column"*
         to create a new :obj:`~pandas.Series` object.
@@ -83,7 +86,7 @@ def puffy_to_long(table, **kwargs):
     See Also
     --------
     FrameEngine.to_long
-    FrameEngine.cols_to_long
+    FrameEngine.expand_col
 
     Notes
     -----
@@ -110,20 +113,20 @@ def puffy_to_long(table, **kwargs):
     a `long-format` :obj:`~pandas.DataFrame`:
 
     >>> pb.puffy_to_long(df)
-        index_col_0 b_level0  b_level1     b  a_level0    a
-    0             0        c         0  asdf         0  1.0
-    1             0        c         0  asdf         1  2.0
-    2             0        c         0  asdf         2  3.0
-    3             0        d         0   ret         0  1.0
-    4             0        d         0   ret         1  2.0
-    5             0        d         0   ret         2  3.0
-    6             1        d         0     r         0  4.0
-    7             1        d         0     r         1  5.0
-    8             1        d         0     r         2  6.0
-    9             1        d         0     r         3  7.0
-    10            2        c         0    ff         0  3.0
-    11            2        c         0    ff         1  4.0
-    12            2        c         0    ff         2  5.0
+        index_level0  a_level0    a b_level0  b_level1     b
+    0              0         0  1.0        c         0  asdf
+    1              0         0  1.0        d         0   ret
+    2              0         1  2.0        c         0  asdf
+    3              0         1  2.0        d         0   ret
+    4              0         2  3.0        c         0  asdf
+    5              0         2  3.0        d         0   ret
+    6              1         0  4.0        d         0     r
+    7              1         1  5.0        d         0     r
+    8              1         2  6.0        d         0     r
+    9              1         3  7.0        d         0     r
+    10             2         0  3.0        c         0    ff
+    11             2         1  4.0        c         0    ff
+    12             2         2  5.0        c         0    ff
     """
 
-    return FrameEngine(table).to_long(**kwargs)
+    return FrameEngine(table).to_long(*cols, **kwargs)

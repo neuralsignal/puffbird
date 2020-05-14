@@ -6,6 +6,8 @@ Various iterable functions that can be used instead of `iter`
 to pass to the `puffy_to_long` or `to_long` method in `FrameEngine`.
 """
 
+from typing import Callable
+
 
 class CallableContainer:
     """
@@ -27,13 +29,13 @@ class CallableContainer:
     passed.
     """
 
-    def __init__(self, default_callable):
+    def __init__(self, default_callable: Callable):
         self._default_callable = default_callable
         self._callables = []
 
-    def add(self, a_callable, classes):
+    def add(self, a_callable: Callable, classes):
         """
-        Add a new callable with allowed classes
+        Add a new callable with allowed classes.
         """
         self._callables.append(
             (a_callable, classes)
@@ -42,7 +44,7 @@ class CallableContainer:
 
     def __call__(self, x):
         """
-        Call the container
+        Check type of `x` and then use the appropriate callable.
         """
         for callme, classes in self._callables:
             if isinstance(x, classes):

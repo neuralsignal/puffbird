@@ -14,7 +14,7 @@ class SeriesIsHashable:
         return series.dtype != object or is_hashable(tuple(series))
 
     def __repr__(self):
-        return 'series_is_hashable'
+        return 'is_hashable(series)'
 
 
 series_is_hashable = SeriesIsHashable()

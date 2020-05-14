@@ -15,7 +15,6 @@ puffbird.FrameEngine
       
       FrameEngine.apply
       FrameEngine.col_apply
-      FrameEngine.cols_to_long
       FrameEngine.drop
       FrameEngine.expand_col
       FrameEngine.multid_pivot
@@ -34,8 +33,12 @@ puffbird.FrameEngine
    .. autosummary::
       :toctree:
       
+      FrameEngine.cols
+      FrameEngine.cols_rename
       FrameEngine.datacols
+      FrameEngine.datacols_rename
       FrameEngine.indexcols
+      FrameEngine.indexcols_rename
       FrameEngine.table
 
 

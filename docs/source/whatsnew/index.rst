@@ -7,8 +7,7 @@ Release notes
 *************
 
 This is the list of changes to puffbird between each release. For full details,
-see the `commit logs <https://github.com/gucky92/puffbird/commits/>`_. For install and
-upgrade instructions, see :ref:`install`.
+see the `commit logs <https://github.com/gucky92/puffbird/commits/>`_.
 
 Version 0.0.0
 -------------

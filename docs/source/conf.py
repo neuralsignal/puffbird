@@ -68,7 +68,8 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.linkcode",
     "nbsphinx",
-    "contributors",  # custom puffbird extension
+    "nbsphinx_link",
+    "contributors",  # custom pandas extension
 ]
 
 exclude_patterns = ["**.ipynb_checkpoints"]
