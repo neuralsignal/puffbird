@@ -1,6 +1,6 @@
 ipython==7.14.0
 scipy==1.4.1
-matplotlib
+matplotlib==3.2.1
 numpy
 pandas>=0.25.3
 
