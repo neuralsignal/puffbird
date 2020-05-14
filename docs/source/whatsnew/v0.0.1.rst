@@ -1,10 +1,9 @@
-.. _whatsnew_0000:
-
-Version 0.0.0 (May 15, 2020)
------------------------------
+.. _whatsnew_0001:
 
 {{ header }}
 
+Version 0.0.1 (May 15, 2020)
+-----------------------------
 
 Preliminary version of puffbird. It contains the main features, which include
 the :obj:`puffy_to_long` function and the :obj:`FrameEngine` object.
