@@ -12,7 +12,7 @@ git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
 nbsphinx-link==1.2.0
 sphinx-automodapi==0.12
 nbconvert==5.6.1
-pandoc
+pandoc==1.0.2
 flake8
 gitpython
 pygithub
