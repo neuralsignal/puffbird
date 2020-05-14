@@ -6,9 +6,9 @@ from setuptools import setup, find_packages
 
 requirements = ['pandas>=0.25.3']
 
-# setup_requirements = ['pytest-runner', ]
+setup_requirements = ['pytest-runner', ] + requirements
 
-# test_requirements = ['pytest>=3', ]
+test_requirements = ['pytest>=3', ] + requirements
 
 setup(
     author="gucky92",
@@ -32,9 +32,9 @@ setup(
     keywords='puffbird',
     name='puffbird',
     packages=find_packages(include=['puffbird', 'puffbird.*']),
-    # setup_requires=setup_requirements,
-    # test_suite='tests',
-    # tests_require=test_requirements,
+    setup_requires=setup_requirements,
+    test_suite='tests',
+    tests_require=test_requirements,
     url='https://github.com/gucky92/puffbird',
     version='0.0.0',
     zip_safe=False,
