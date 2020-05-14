@@ -1,6 +1,6 @@
 __author__ = """gucky92"""
 __email__ = 'gucky@gucky.eu'
-__version__ = '0.0.0'
+__version__ = '0.0.1'
 
 from puffbird.frame import FrameEngine
 from puffbird.shortcuts import puffy_to_long
