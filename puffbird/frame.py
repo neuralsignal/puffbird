@@ -82,7 +82,7 @@ class FrameEngine:
         If True, try to convert all types to identifier string types
         and check if all columns are identifier string types.
         Enforcement only works if column types are :obj:`str`,
-        :obj:`numbers.Number`, or :obj:`tuple` object types.
+        :obj:`~numbers.Number`, or :obj:`tuple` object types.
         Throw an error if enforcement does not work. Defaults to False.
 
     Notes
@@ -534,6 +534,7 @@ class FrameEngine:
 
         # reindex if necessary:
         if reindex:
+            # this will not necessarily produce unique indices
             index = list(set(df.columns) - set(self.datacols))
             df.set_index(index, inplace=True)
 

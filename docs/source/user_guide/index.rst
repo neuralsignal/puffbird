@@ -47,8 +47,11 @@ object types that can be iterated over. To quickly create a *long-format*
 Tutorials
 ---------
 
-* `Creating long dataframe from puffy tables <intro_tolong.ipynb>`_.
+The different tutorials are listed below:
 
+* `Creating long dataframe from puffy tables <intro_tolong.ipynb>`_.
+    .. image:: https://mybinder.org/badge_logo.svg
+        :target: https://mybinder.org/v2/gh/gucky92/puffbird/master?filepath=tutorials%2FCreate_Long_DataFrames.ipynb
 
 .. toctree::
     :maxdepth: 2
