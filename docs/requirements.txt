@@ -9,7 +9,7 @@ recommonmark
 numpydoc
 nbsphinx
 git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
-nbsphinx-link
+nbsphinx-link==1.3.0
 sphinx-automodapi
 nbconvert
 pandoc
