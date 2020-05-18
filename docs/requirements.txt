@@ -1,7 +1,7 @@
 ipython
 scipy
 matplotlib
-numpy
+numpy==1.18.4
 pandas>=0.25.3
 
 sphinx==3.0.3
