@@ -2,7 +2,7 @@ pip==20.1.1
 bump2version
 wheel
 watchdog
-flake8
+flake8==3.8.2
 tox
 coverage
 twine
