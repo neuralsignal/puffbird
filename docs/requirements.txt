@@ -10,7 +10,7 @@ numpydoc
 nbsphinx
 git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
 nbsphinx-link
-sphinx-automodapi
+sphinx-automodapi==0.13
 nbconvert
 pandoc
 flake8
