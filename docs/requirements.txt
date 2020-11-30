@@ -15,4 +15,4 @@ nbconvert
 pandoc
 flake8
 gitpython
-pygithub
+pygithub==1.54
