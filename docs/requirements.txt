@@ -5,7 +5,7 @@ numpy
 pandas>=0.25.3
 
 sphinx==3.0.3
-recommonmark
+recommonmark==0.7.1
 numpydoc
 nbsphinx
 git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
