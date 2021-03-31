@@ -794,6 +794,7 @@ class FrameEngine:
             ),
             axis=1, result_type="reduce"
         )
+        series.index = self.table.index
         if isinstance(series, pd.DataFrame):
             raise PuffbirdError("The function 'func' cannot return "
                                 "a `pandas.Series` object.")

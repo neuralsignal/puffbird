@@ -36,6 +36,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/gucky92/puffbird',
-    version='0.0.1',
+    version='0.0.2dev1',
     zip_safe=False,
 )
