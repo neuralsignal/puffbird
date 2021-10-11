@@ -13,6 +13,6 @@ nbsphinx-link
 sphinx-automodapi
 nbconvert
 pandoc
-flake8
+flake8==4.0.1
 gitpython
 pygithub
