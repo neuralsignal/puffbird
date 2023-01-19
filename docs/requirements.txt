@@ -7,7 +7,7 @@ pandas>=0.25.3
 sphinx==3.0.3
 recommonmark
 numpydoc
-nbsphinx
+nbsphinx==0.8.12
 git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
 nbsphinx-link
 sphinx-automodapi
