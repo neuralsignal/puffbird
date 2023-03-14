@@ -1,6 +1,6 @@
 pip==20.1.1
 bump2version
-wheel
+wheel==0.40.0
 watchdog
 flake8
 tox
