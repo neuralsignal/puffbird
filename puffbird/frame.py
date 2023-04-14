@@ -1073,6 +1073,7 @@ class FrameEngine:
         >>> dataset = table.multid_pivot(['C', 'D'], 'A')
 
         """
+        dims = list(dims)
         # Use pandas.pivot_table to create a multidimensional pivot
         df_pivot = pd.pivot_table(
             self.table, values=values, index=dims, 

@@ -4,7 +4,7 @@
 
 from setuptools import setup, find_packages
 
-requirements = ['pandas>=0.25.3', 'xarray']
+requirements = ['pandas', 'xarray']
 
 setup_requirements = ['pytest-runner', ] + requirements
 
