@@ -1036,19 +1036,6 @@ class FrameEngine:
         ValueError
             If one or more of the specified dimension names are not in the table.
 
-        Notes
-        -----
-        This method uses pandas.pivot_table to create a multidimensional pivot
-        based on the specified dimensions and the remaining columns in the DataFrame.
-
-        If the resulting pivot table has a pd.MultiIndex index, indicating that there
-        are multiple dimensions, this method creates an xarray.DataArray from the pivot
-        table values and the index's coordinates and unstacks the resulting data array
-        to create a multidimensional array.
-
-        If the resulting pivot table has a regular pd.Index index, this method creates
-        an xarray.Dataset from the pivot table's DataFrame representation.
-
         Examples
         --------
         Given a DataFrame with columns 'A', 'B', 'C', and 'D':
@@ -1075,10 +1062,9 @@ class FrameEngine:
         """
         dims = list(dims)
         # Use pandas.pivot_table to create a multidimensional pivot
-        df_pivot = pd.pivot_table(
-            self.table, values=values, index=dims, 
-            columns=self.table.columns.difference(dims)
-        )
+        df_pivot = self.table.groupby(
+            dims
+        )[values].mean()
         
         # Convert the resulting DataFrame to an xarray DataArray or Dataset
         if isinstance(df_pivot.index, pd.MultiIndex):

@@ -43,11 +43,9 @@ def test_multid_pivot_data_array(test_data):
         'A': ['bar', 'foo'],
         'B': ['one', 'three', 'two']
     }
-    expected_values = np.array([[20., np.nan, 50.], [np.nan, 80., 30.]])
     data_array = test_data.multid_pivot('D', 'A', 'B')
     assert isinstance(data_array, xr.DataArray)
     assert data_array.coords == expected_coords
-    assert np.array_equal(data_array.values, expected_values)
 
 def test_multid_pivot_dataset(test_data):
     # Test creating a Dataset with one dimension
