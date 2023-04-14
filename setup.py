@@ -4,7 +4,7 @@
 
 from setuptools import setup, find_packages
 
-requirements = ['pandas>=0.25.3']
+requirements = ['pandas>=0.25.3', 'xarray']
 
 setup_requirements = ['pytest-runner', ] + requirements
 
@@ -13,7 +13,7 @@ test_requirements = ['pytest>=3', ] + requirements
 setup(
     author="gucky92",
     author_email='gucky@gucky.eu',
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

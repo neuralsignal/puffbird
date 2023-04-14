@@ -12,6 +12,7 @@ from typing import (
     Collection, Sequence, Callable
 )
 from numbers import Number
+import xarray as xr
 
 import numpy as np
 import pandas as pd
@@ -1016,16 +1017,75 @@ class FrameEngine:
 
     def multid_pivot(self, values=None, *dims):
         """
-        Pivot the `table` to create a multidimensional
-        :obj:`xarray.DataArray` or :obj:`xarray.DataSet` object.
+        Pivot the `table` to create a multidimensional xarray DataArray or Dataset object.
 
-        .. warning::
+        Parameters
+        ----------
+        values : str, optional
+            The column to aggregate. By default, aggregates all columns.
+        *dims : str
+            One or more dimension names to pivot the table on.
 
-            This method has not yet been implemented. It will be
-            defined in future releases.
+        Returns
+        -------
+        xarray.DataArray or xarray.Dataset
+            A multidimensional DataArray or Dataset object.
+
+        Raises
+        ------
+        ValueError
+            If one or more of the specified dimension names are not in the table.
+
+        Notes
+        -----
+        This method uses pandas.pivot_table to create a multidimensional pivot
+        based on the specified dimensions and the remaining columns in the DataFrame.
+
+        If the resulting pivot table has a pd.MultiIndex index, indicating that there
+        are multiple dimensions, this method creates an xarray.DataArray from the pivot
+        table values and the index's coordinates and unstacks the resulting data array
+        to create a multidimensional array.
+
+        If the resulting pivot table has a regular pd.Index index, this method creates
+        an xarray.Dataset from the pivot table's DataFrame representation.
+
+        Examples
+        --------
+        Given a DataFrame with columns 'A', 'B', 'C', and 'D':
+
+        >>> import pandas as pd
+        >>> import xarray as xr
+        >>> df = pd.DataFrame({
+        ...    'A': ['foo', 'bar', 'foo', 'bar', 'foo', 'bar', 'foo', 'foo'],
+        ...    'B': ['one', 'one', 'two', 'three', 'two', 'two', 'one', 'three'],
+        ...    'C': [1, 2, 3, 4, 5, 6, 7, 8],
+        ...    'D': [10, 20, 30, 40, 50, 60, 70, 80]
+        ... })
+
+        We can pivot the DataFrame on two dimensions to create a multidimensional
+        DataArray:
+
+        >>> table = FrameEngine(df)
+        >>> data_array = table.multid_pivot('D', 'A', 'B')
+
+        We can also pivot the DataFrame on a single dimension to create a Dataset:
+
+        >>> dataset = table.multid_pivot(['C', 'D'], 'A')
+
         """
-        # TODO long frame to xarray? - multidimensional pivot
-        raise NotImplementedError("multid_pivot")
+        # Use pandas.pivot_table to create a multidimensional pivot
+        df_pivot = pd.pivot_table(
+            self.table, values=values, index=dims, 
+            columns=self.table.columns.difference(dims)
+        )
+        
+        # Convert the resulting DataFrame to an xarray DataArray or Dataset
+        if isinstance(df_pivot.index, pd.MultiIndex):
+            data_array = xr.DataArray(df_pivot.values, coords=df_pivot.index.to_xarray().coords)
+            return data_array.unstack()
+        else:
+            dataset = xr.Dataset.from_dataframe(df_pivot)
+            return dataset
 
     def _select_frame(self, col):
         # assumes column has already be substituted

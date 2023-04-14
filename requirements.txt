@@ -7,6 +7,7 @@ tox
 coverage
 twine
 pandas>=0.25.3
+xarray
 
 pytest
 pytest-runner==5.2
