@@ -4,7 +4,7 @@ matplotlib
 numpy
 pandas>=0.25.3
 
-sphinx==3.0.3
+sphinx==7.2.5
 recommonmark
 numpydoc
 nbsphinx
