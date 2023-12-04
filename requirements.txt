@@ -9,4 +9,4 @@ twine
 pandas>=0.25.3
 
 pytest
-pytest-runner==5.2
+pytest-runner==6.0.1
