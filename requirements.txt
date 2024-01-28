@@ -8,5 +8,5 @@ coverage
 twine
 pandas>=0.25.3
 
-pytest
+pytest==8.0.0
 pytest-runner==5.2
