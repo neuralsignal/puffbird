@@ -11,7 +11,7 @@ nbsphinx
 git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
 nbsphinx-link
 sphinx-automodapi
-nbconvert
+nbconvert==7.16.0
 pandoc
 flake8
 gitpython
