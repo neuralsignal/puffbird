@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: puffbird
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Matthias
+    family-names: Christenson
+    email: gucky92@protonmail.com
+    orcid: 'https://orcid.org/0000-0003-4858-6541'
+identifiers:
+  - type: url
+    value: 'https://github.com/gucky92/puffbird'
+  - type: doi
+    value: 10.5281/zenodo.10687023
+repository-code: 'https://github.com/gucky92/puffbird'
+url: 'https://puffbird.readthedocs.io/en/latest/'
+keywords:
+  - pandas
+  - seaborn
+  - dataframe
+  - long-format
+license: MIT
