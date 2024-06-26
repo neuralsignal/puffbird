@@ -5,7 +5,7 @@ watchdog
 flake8
 tox
 coverage
-twine
+twine==5.1.1
 pandas>=0.25.3
 
 pytest
