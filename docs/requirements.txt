@@ -1,4 +1,4 @@
-ipython==7.14.0
+ipython==8.26.0
 scipy
 matplotlib
 numpy
