@@ -5,7 +5,7 @@ numpy
 pandas
 xarray
 
-sphinx
+sphinx==8.0.2
 recommonmark
 numpydoc
 nbsphinx
