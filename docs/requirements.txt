@@ -2,7 +2,7 @@ ipython
 scipy
 matplotlib
 numpy
-pandas
+pandas==2.2.3
 xarray
 
 sphinx
