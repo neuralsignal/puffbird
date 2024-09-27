@@ -1,7 +1,7 @@
 pip
 bump2version
 wheel
-watchdog
+watchdog==5.0.3
 flake8
 tox
 coverage
