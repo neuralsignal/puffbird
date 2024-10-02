@@ -1,4 +1,4 @@
-ipython
+ipython==8.28.0
 scipy
 matplotlib
 numpy
