@@ -3,7 +3,7 @@ bump2version
 wheel
 watchdog
 flake8
-tox
+tox==4.22.0
 coverage
 twine
 pandas
