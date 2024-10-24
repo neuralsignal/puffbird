@@ -3,7 +3,7 @@ scipy
 matplotlib
 numpy
 pandas
-xarray
+xarray==2024.10.0
 
 sphinx
 recommonmark
