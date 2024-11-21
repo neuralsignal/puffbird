@@ -1,6 +1,6 @@
 ipython
 scipy
-matplotlib
+matplotlib==3.7.3
 numpy
 pandas
 xarray
