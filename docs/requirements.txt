@@ -7,7 +7,7 @@ xarray
 
 sphinx
 recommonmark
-numpydoc
+numpydoc==1.8.0
 nbsphinx
 git+https://github.com/pandas-dev/pydata-sphinx-theme.git@master
 nbsphinx-link
