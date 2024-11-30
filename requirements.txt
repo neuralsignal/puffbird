@@ -5,7 +5,7 @@ watchdog
 flake8
 tox
 coverage
-twine
+twine==6.0.0
 pandas
 xarray
 
