@@ -9,5 +9,5 @@ twine
 pandas
 xarray
 
-pytest
+pytest==8.3.4
 pytest-runner
